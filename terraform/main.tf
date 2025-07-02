@@ -447,3 +447,65 @@ resource "aws_lb_listener_rule" "nlb_rule_1" {
     }
   }
 }
+
+################################### RELATIONAL DATABASE ###################################
+
+resource "aws_db_subnet_group" "db_subnets" {
+  name       = "mysql database subnets"
+  subnet_ids = [aws_subnet.private_subnets[4].id, aws_subnet.private_subnets[5].id]
+
+  tags = {
+    Name = "MySQL database subnets"
+  }
+}
+
+data "aws_rds_engine_version" "mysql" {
+  engine = "mysql"
+  latest = true
+}
+
+resource "aws_db_instance" "mysql_instance" {
+  allocated_storage      = 10
+  db_name                = "mysql_db"
+  identifier             = "mysql-db"
+  engine                 = data.aws_rds_engine_version.mysql.engine
+  engine_version         = data.aws_rds_engine_version.mysql.version
+  instance_class         = var.db_instance_type
+  username               = var.db_username
+  password               = var.db_password
+  multi_az               = true
+  storage_encrypted      = true
+  storage_type           = "gp3"
+  db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  publicly_accessible    = false
+
+  tags = merge(local.common_tags, {
+    Name = "mysql_db"
+  })
+}
+
+resource "aws_security_group" "db_sg" {
+  name        = "db_security_group"
+  description = "Allow TLS inbound traffic and all outbound traffic"
+  vpc_id      = aws_vpc.vpc.id
+
+  tags = merge(local.common_tags, {
+    Name = "db_security_group"
+  })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "db_allow_http" {
+  security_group_id            = aws_security_group.db_sg.id
+  referenced_security_group_id = aws_security_group.backend_sg.id
+  from_port                    = 3306
+  ip_protocol                  = "tcp"
+  to_port                      = 3306
+}
+
+resource "aws_vpc_security_group_egress_rule" "db_allow_all_traffic_ipv4" {
+  security_group_id = aws_security_group.db_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1" # semantically equivalent to all ports
+}
+

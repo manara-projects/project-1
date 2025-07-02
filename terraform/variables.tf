@@ -44,7 +44,7 @@ variable "frontend_instance_type" {
 
 variable "backend_instance_type" {
   type        = string
-  description = "Size to use for the nackend template"
+  description = "Size to use for the backend template"
   default     = "t2.micro"
 }
 
@@ -58,4 +58,22 @@ variable "backend_script" {
   type        = string
   description = "Script that will run on backend instances"
   default     = "./backend.sh"
+}
+
+variable "db_instance_type" {
+  type        = string
+  description = "Size to use for the database instances"
+  default     = "db.t3.micro"
+}
+
+variable "db_username" {
+  type        = string
+  description = "The username of data pase"
+  sensitive   = true
+}
+
+variable "db_password" {
+  type        = string
+  description = "The password of database"
+  sensitive   = true
 }
