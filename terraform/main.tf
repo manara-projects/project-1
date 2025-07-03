@@ -612,3 +612,168 @@ resource "aws_cloudfront_distribution" "cloudfront_alb" {
 }
 
 ################################### CLOUDWATCH & SNS ###################################
+
+resource "aws_autoscaling_policy" "frontend_as_policy_up" {
+  name                   = "frontend-autoscaling-policy_up"
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.frontend_asg.name
+  policy_type            = "StepScaling"
+  step_adjustment {
+    scaling_adjustment          = 1
+    metric_interval_lower_bound = 0.0
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "frontend_asg_alarm_up" {
+  alarm_name          = "frontend-autoscaling-group-alarm_up"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.frontend_asg.name
+  }
+
+  alarm_description = "Increase instance count when CPU > 80%"
+  alarm_actions = [
+    aws_autoscaling_policy.frontend_as_policy_up.arn,
+    aws_sns_topic.ec2_cpu_utlization.arn
+  ]
+}
+
+resource "aws_autoscaling_policy" "frontend_as_policy_down" {
+  name                   = "frontend-autoscaling-policy"
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.frontend_asg.name
+  policy_type            = "StepScaling"
+  step_adjustment {
+    scaling_adjustment          = -1
+    metric_interval_lower_bound = 0.0
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "frontend_asg_alarm_down" {
+  alarm_name          = "frontend-autoscaling-group-alarm_down"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 30
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.frontend_asg.name
+  }
+
+  alarm_description = "Decrease instance count when CPU < 30%"
+  alarm_actions = [
+    aws_autoscaling_policy.frontend_as_policy_down.arn,
+    aws_sns_topic.ec2_cpu_utlization.arn
+  ]
+}
+
+resource "aws_autoscaling_policy" "backend_as_policy_up" {
+  name                   = "backend-autoscaling-policy_up"
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.backend_asg.name
+  policy_type            = "StepScaling"
+  step_adjustment {
+    scaling_adjustment          = 1
+    metric_interval_lower_bound = 0.0
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "backend_asg_alarm_up" {
+  alarm_name          = "backend-autoscaling-group-alarm_up"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.backend_asg.name
+  }
+
+  alarm_description = "Increase instance count when CPU > 80%"
+  alarm_actions = [
+    aws_autoscaling_policy.backend_as_policy_up.arn,
+    aws_sns_topic.ec2_cpu_utlization.arn
+  ]
+}
+
+resource "aws_autoscaling_policy" "backend_as_policy_down" {
+  name                   = "backend-autoscaling-policy"
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.backend_asg.name
+  policy_type            = "StepScaling"
+  step_adjustment {
+    scaling_adjustment          = -1
+    metric_interval_lower_bound = 0.0
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "backend_asg_alarm_down" {
+  alarm_name          = "backend-autoscaling-group-alarm_down"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 30
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.backend_asg.name
+  }
+
+  alarm_description = "Decrease instance count when CPU < 30%"
+  alarm_actions = [
+    aws_autoscaling_policy.backend_as_policy_down.arn,
+    aws_sns_topic.ec2_cpu_utlization.arn
+  ]
+}
+
+resource "aws_cloudwatch_metric_alarm" "database_alarm" {
+  alarm_name          = "database-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.mysql_instance.id
+  }
+
+  alarm_description = "Notify admin when CPU > 80%"
+  alarm_actions = [
+    aws_sns_topic.ec2_cpu_utlization.arn
+  ]
+}
+
+resource "aws_sns_topic" "ec2_cpu_utlization" {
+  name = "ec2_cpu_utlization"
+}
+
+resource "aws_sns_topic_subscription" "ec2_cpu_utlization_email_target" {
+  topic_arn = aws_sns_topic.ec2_cpu_utlization.arn
+  protocol  = "email"
+  endpoint  = var.sns_email
+}
+
+################################### ROUTE53 ###################################
+

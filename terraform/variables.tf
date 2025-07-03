@@ -77,3 +77,8 @@ variable "db_password" {
   description = "The password of database"
   sensitive   = true
 }
+
+variable "sns_email" {
+  type        = string
+  description = "Email address to recieve emails from sns"
+}
