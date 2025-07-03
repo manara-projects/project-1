@@ -82,3 +82,8 @@ variable "sns_email" {
   type        = string
   description = "Email address to recieve emails from sns"
 }
+
+variable "domain_name" {
+  type        = string
+  description = " The name of the hosted zone"
+}

@@ -390,7 +390,7 @@ resource "aws_security_group" "alb_sg" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_allow_http" {
   security_group_id = aws_security_group.alb_sg.id
-  cidr_ipv4         = "0.0.0.0/0"
+  prefix_list_id    = aws_cloudfront_distribution.cloudfront_alb.id
   from_port         = 80
   ip_protocol       = "tcp"
   to_port           = 80
@@ -777,3 +777,14 @@ resource "aws_sns_topic_subscription" "ec2_cpu_utlization_email_target" {
 
 ################################### ROUTE53 ###################################
 
+resource "aws_route53_zone" "application_zone" {
+  name = var.domain_name
+}
+
+resource "aws_route53_record" "cloudfront_record" {
+  zone_id = aws_route53_zone.application_zone.id
+  name    = "www.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 10
+  records = [aws_cloudfront_distribution.cloudfront_alb.domain_name]
+}
