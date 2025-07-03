@@ -509,3 +509,106 @@ resource "aws_vpc_security_group_egress_rule" "db_allow_all_traffic_ipv4" {
   ip_protocol       = "-1" # semantically equivalent to all ports
 }
 
+################################### CLOUDFRONT & WAF ###################################
+
+resource "aws_wafv2_web_acl" "waf_cf" {
+  name        = "cloudfront-waf"
+  description = "WAF for CloudFront"
+  scope       = "CLOUDFRONT"
+  default_action {
+    allow {}
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "cloudfrontWAF"
+    sampled_requests_enabled   = true
+  }
+
+  rule {
+    name     = "block-bad-bots"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      byte_match_statement {
+        search_string = "BadBot"
+        field_to_match {
+          headers {
+            match_pattern {
+              all {}
+            }
+            match_scope       = "ALL"
+            oversize_handling = "MATCH"
+          }
+        }
+        text_transformation {
+          priority = 0
+          type     = "NONE"
+        }
+        positional_constraint = "CONTAINS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "blockBadBots"
+      sampled_requests_enabled   = true
+    }
+  }
+}
+
+resource "aws_cloudfront_distribution" "cloudfront_alb" {
+  origin {
+    domain_name = aws_lb.alb.dns_name
+    origin_id   = "alb-origin"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443         # Still required, even if unused
+      origin_protocol_policy = "http-only" # Force HTTP from CloudFront to ALB
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  enabled             = true
+  default_root_object = "index.html"
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "alb-origin"
+
+    viewer_protocol_policy = "allow-all" # Allow HTTP and HTTPS from client to CloudFront
+
+    forwarded_values {
+      query_string = true
+
+      cookies {
+        forward = "all"
+      }
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true # Will use *.cloudfront.net domain
+  }
+
+  web_acl_id = aws_wafv2_web_acl.waf_cf.id # Attach WAF to CloudFront
+  comment    = "CloudFront with ALB origin using HTTP only and WAF attached"
+
+  tags = merge(local.common_tags, {
+    Name = "cloudfront_with_alb_and_waf"
+  })
+}
+
+################################### CLOUDWATCH & SNS ###################################
