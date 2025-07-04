@@ -165,6 +165,8 @@ resource "aws_instance" "bastion_host" {
   tags = merge(local.common_tags, {
     Name = "bastion_host"
   })
+
+  depends_on = [aws_subnet.public_subnets]
 }
 
 resource "aws_key_pair" "key-pair" {
@@ -346,6 +348,11 @@ resource "aws_lb" "alb" {
   subnets                    = [for i in aws_subnet.public_subnets : i.id]
   enable_deletion_protection = false
 
+  access_logs {
+    bucket  = aws_s3_bucket.logs_bucket.bucket
+    enabled = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "alb"
   })
@@ -390,7 +397,7 @@ resource "aws_security_group" "alb_sg" {
 
 resource "aws_vpc_security_group_ingress_rule" "alb_allow_http" {
   security_group_id = aws_security_group.alb_sg.id
-  prefix_list_id    = aws_cloudfront_distribution.cloudfront_alb.id
+  cidr_ipv4         = "0.0.0.0/0"
   from_port         = 80
   ip_protocol       = "tcp"
   to_port           = 80
@@ -415,6 +422,11 @@ resource "aws_lb" "nlb" {
   subnets                    = [aws_subnet.private_subnets[2].id, aws_subnet.private_subnets[3].id]
   enable_deletion_protection = false
 
+  access_logs {
+    bucket  = aws_s3_bucket.logs_bucket.bucket
+    enabled = true
+  }
+
   tags = merge(local.common_tags, {
     Name     = "nlb"
     Internal = true
@@ -424,7 +436,7 @@ resource "aws_lb" "nlb" {
 resource "aws_lb_listener" "backend_lb_listener" {
   load_balancer_arn = aws_lb.nlb.arn
   port              = "80"
-  protocol          = "HTTP"
+  protocol          = "TCP"
 
   default_action {
     type             = "forward"
@@ -474,7 +486,7 @@ resource "aws_db_instance" "mysql_instance" {
   username               = var.db_username
   password               = var.db_password
   multi_az               = true
-  storage_encrypted      = true
+  storage_encrypted      = false
   storage_type           = "gp3"
   db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
@@ -609,6 +621,11 @@ resource "aws_cloudfront_distribution" "cloudfront_alb" {
   tags = merge(local.common_tags, {
     Name = "cloudfront_with_alb_and_waf"
   })
+
+  depends_on = [
+    aws_lb.alb,
+    aws_wafv2_web_acl.waf_cf
+  ]
 }
 
 ################################### CLOUDWATCH & SNS ###################################
@@ -787,4 +804,40 @@ resource "aws_route53_record" "cloudfront_record" {
   type    = "CNAME"
   ttl     = 10
   records = [aws_cloudfront_distribution.cloudfront_alb.domain_name]
+
+  depends_on = [aws_cloudfront_distribution.cloudfront_alb]
+}
+
+################################### S3 LOGS BUCKET ###################################
+
+resource "aws_s3_bucket" "logs_bucket" {
+  bucket = var.logs_bucket_name
+
+  tags = merge(local.common_tags, {
+    Name = var.logs_bucket_name
+  })
+}
+
+resource "aws_s3_bucket_policy" "allow_access_for_lb" {
+  bucket = aws_s3_bucket.logs_bucket.id
+  policy = data.aws_iam_policy_document.allow_access_for_lb.json
+}
+
+data "aws_iam_policy_document" "allow_access_for_lb" {
+  statement {
+    principals {
+      type        = "AWS"
+      identifiers = [aws_lb.alb.arn, aws_lb.nlb.arn]
+    }
+
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
+
+    resources = [
+      aws_s3_bucket.logs_bucket.arn,
+      "${aws_s3_bucket.logs_bucket.arn}/*",
+    ]
+  }
 }
