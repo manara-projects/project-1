@@ -31,9 +31,9 @@ variable "public_key" {
 }
 
 variable "my_public_ip" {
-  type      = string
-  default   = "The ip that is allowed to SSH into bastion host"
-  sensitive = true
+  type        = string
+  description = "The ip that is allowed to SSH into bastion host"
+  sensitive   = true
 }
 
 variable "frontend_instance_type" {
