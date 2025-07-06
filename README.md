@@ -88,7 +88,7 @@ Upon completion, you will be confident in designing, provisioning, and managing 
 
    ```bash
    git clone https://github.com/manara-projects/project-1.git
-   cd project-1
+   cd project-1/terraform/
    ```
 
 2. **Configure your terraform.tfvars**
